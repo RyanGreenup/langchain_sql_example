@@ -8,3 +8,6 @@ init:
 
 run:
     npx tsx file.ts
+
+run-agent:
+    npx tsx agent.ts
