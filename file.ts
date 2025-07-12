@@ -178,6 +178,42 @@ async function main() {
 }
 
 
+function formatJsonAsMarkdownTable(jsonString: string): string {
+  try {
+    const data = JSON.parse(jsonString);
+    
+    if (!Array.isArray(data) || data.length === 0) {
+      return "No tabular data available";
+    }
+    
+    const firstRow = data[0];
+    if (typeof firstRow !== 'object' || firstRow === null) {
+      return "Data is not in tabular format";
+    }
+    
+    const headers = Object.keys(firstRow);
+    
+    // Create header row
+    const headerRow = "| " + headers.join(" | ") + " |";
+    
+    // Create separator row
+    const separatorRow = "| " + headers.map(() => "---").join(" | ") + " |";
+    
+    // Create data rows
+    const dataRows = data.map(row => {
+      const values = headers.map(header => {
+        const value = row[header];
+        return value !== null && value !== undefined ? String(value) : "";
+      });
+      return "| " + values.join(" | ") + " |";
+    });
+    
+    return [headerRow, separatorRow, ...dataRows].join("\n");
+  } catch (error) {
+    return "Error formatting data as table: " + error;
+  }
+}
+
 async function agent() {
   const llm = get_llm();
   const db = await get_db();
@@ -276,9 +312,20 @@ async function agent() {
     console.log("## 📋 Query Results\n");
     sqlResults.forEach((result, index) => {
       console.log(`### Result ${index + 1}:`);
-      console.log("```");
-      console.log(result);
-      console.log("```\n");
+      
+      // Try to format as table if it's JSON data
+      const tableFormatted = formatJsonAsMarkdownTable(result);
+      if (tableFormatted.includes("|") && !tableFormatted.startsWith("Error") && !tableFormatted.startsWith("No tabular") && !tableFormatted.startsWith("Data is not")) {
+        console.log(tableFormatted);
+        console.log("\n**Raw JSON:**");
+        console.log("```json");
+        console.log(result);
+        console.log("```\n");
+      } else {
+        console.log("```");
+        console.log(result);
+        console.log("```\n");
+      }
     });
   }
   
