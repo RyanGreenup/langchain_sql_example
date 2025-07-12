@@ -2,6 +2,8 @@
 
 Examples demonstrating LangChain integration with SQLite for SQL query generation and LLM responses.
 
+Built for use in [langchain_sql_electron](https://github.com/RyanGreenup/langchain_sql_electron)
+
 ## Setup
 
 ```bash
