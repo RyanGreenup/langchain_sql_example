@@ -5,6 +5,11 @@ import { QuerySqlTool } from "langchain/tools/sql";
 import { DataSource } from "typeorm";
 import { z } from "zod";
 import { SqlToolkit } from "langchain/agents/toolkits/sql";
+import { pull } from "langchain/hub";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { AIMessage, BaseMessage, isAIMessage } from "@langchain/core/messages";
+
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 const InputStateAnnotation = Annotation.Root({
   question: Annotation<string>,
@@ -16,9 +21,6 @@ const StateAnnotation = Annotation.Root({
   result: Annotation<string>,
   answer: Annotation<string>,
 });
-
-import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { pull } from "langchain/hub";
 
 function get_llm(): ChatAnthropic {
   // Depends on ANTHROPIC_API_KEY env var
@@ -38,7 +40,7 @@ function get_llm(): ChatAnthropic {
 async function get_db(): Promise<SqlDatabase> {
   const datasource = new DataSource({
     type: "sqlite",
-    database: "Chinook.db",
+    database: "./Chinook.db",
   });
   const db = await SqlDatabase.fromDataSourceParams({
     appDataSource: datasource,
@@ -172,17 +174,72 @@ async function main() {
 
   /////////////////////////////////////////////////////////////////////////////////////
   /////////////// Agent /////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////////////
+}
 
+
+async function agent() {
+  const llm = get_llm();
+  const db = await get_db();
   const toolkit = new SqlToolkit(db, llm);
   const tools = toolkit.getTools();
 
-  console.log(
-    tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-    })),
+  /*
+    console.log(
+      tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+      })),
+    );
+    */
+
+  const systemPromptTemplate = await pull<ChatPromptTemplate>(
+    "langchain-ai/sql-agent-system-prompt",
   );
+
+  console.log(systemPromptTemplate.promptMessages[0].lc_kwargs.prompt.template);
+
+  const systemMessage = await systemPromptTemplate.format({
+    dialect: "SQLite",
+    top_k: 5,
+  });
+
+  const agent = createReactAgent({
+    llm: llm,
+    tools: tools,
+    stateModifier: systemMessage,
+  });
+
+  let inputs2 = {
+    messages: [
+      { role: "user", content: "Which supplier should we charge more money? Assume tasks are paid on a for job basis, infer other details that may drive up costs" },
+    ],
+  };
+
+  const prettyPrint = (message: BaseMessage) => {
+    let txt = `[${message._getType()}]: ${message.content}`;
+    if ((isAIMessage(message) && message.tool_calls?.length) || 0 > 0) {
+      const tool_calls = (message as AIMessage)?.tool_calls
+        ?.map((tc) => `- ${tc.name}(${JSON.stringify(tc.args)})`)
+        .join("\n");
+      txt += ` \nTools: \n${tool_calls}`;
+    }
+    console.log(txt);
+  };
+
+  for await (const step of await agent.stream(inputs2, {
+    streamMode: "values",
+  })) {
+    const lastMessage = step.messages[step.messages.length - 1];
+    prettyPrint(lastMessage);
+    console.log("-----\n");
+  }
 }
 
+
+// async function generate_sql_query_and_output_no_agent()  {
+// }
+
 //
-main().catch(console.error);
+// main().catch(console.error);
+agent().catch(console.error);
