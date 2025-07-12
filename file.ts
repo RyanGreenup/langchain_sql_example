@@ -4,6 +4,7 @@ import { SqlDatabase } from "langchain/sql_db";
 import { QuerySqlTool } from "langchain/tools/sql";
 import { DataSource } from "typeorm";
 import { z } from "zod";
+import { SqlToolkit } from "langchain/agents/toolkits/sql";
 
 const InputStateAnnotation = Annotation.Root({
   question: Annotation<string>,
@@ -33,8 +34,8 @@ function get_llm(): ChatAnthropic {
 
   return llm;
 }
-async function main() {
-  // Query the database
+
+async function get_db(): Promise<SqlDatabase> {
   const datasource = new DataSource({
     type: "sqlite",
     database: "Chinook.db",
@@ -43,6 +44,12 @@ async function main() {
     appDataSource: datasource,
   });
 
+  return db;
+}
+
+async function main() {
+  // Query the database
+  const db = await get_db();
   const result = await db.run("SELECT * FROM Artist LIMIT 10;");
   console.log(result);
 
@@ -150,6 +157,7 @@ async function main() {
 
   console.log(inputs);
   console.log("\n====\n");
+  // Note that each step is
   let finalResult: any[] = [];
   for await (const step of await graph.stream(inputs, {
     streamMode: "updates",
@@ -161,6 +169,19 @@ async function main() {
   // Print only the output text here
   console.log("Final Answer:");
   console.log(finalResult);
+
+  /////////////////////////////////////////////////////////////////////////////////////
+  /////////////// Agent /////////////////////////////////////////////////////////////
+
+  const toolkit = new SqlToolkit(db, llm);
+  const tools = toolkit.getTools();
+
+  console.log(
+    tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+    })),
+  );
 }
 
 //
