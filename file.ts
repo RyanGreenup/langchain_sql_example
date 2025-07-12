@@ -216,11 +216,21 @@ async function agent() {
     ],
   };
 
+  const sqlQueries: string[] = [];
+  const sqlResults: string[] = [];
+  let agentResponse = "";
+
   const prettyPrint = (message: BaseMessage) => {
     let txt = `[${message._getType()}]: ${message.content}`;
     if ((isAIMessage(message) && message.tool_calls?.length) || 0 > 0) {
       const tool_calls = (message as AIMessage)?.tool_calls
-        ?.map((tc) => `- ${tc.name}(${JSON.stringify(tc.args)})`)
+        ?.map((tc) => {
+          // Capture SQL queries from query-sql and query-checker tools
+          if ((tc.name === "query-sql" || tc.name === "query-checker") && tc.args?.input) {
+            sqlQueries.push(tc.args.input);
+          }
+          return `- ${tc.name}(${JSON.stringify(tc.args)})`;
+        })
         .join("\n");
       txt += ` \nTools: \n${tool_calls}`;
     }
@@ -231,9 +241,53 @@ async function agent() {
     streamMode: "values",
   })) {
     const lastMessage = step.messages[step.messages.length - 1];
+    
+    if (lastMessage._getType() === "tool") {
+      const toolMessage = lastMessage as any;
+      // Capture SQL results from query-sql tool
+      if (toolMessage.name === "query-sql") {
+        sqlResults.push(toolMessage.content);
+      }
+    }
+    
+    if (lastMessage._getType() === "ai" && !((lastMessage as AIMessage).tool_calls?.length || 0 > 0)) {
+      agentResponse = lastMessage.content as string;
+    }
+    
     prettyPrint(lastMessage);
     console.log("-----\n");
   }
+
+  console.log("\n" + "=".repeat(80));
+  console.log("# 📊 SQL Agent Analysis Summary");
+  console.log("=".repeat(80));
+  
+  if (sqlQueries.length > 0) {
+    console.log("\n## 🔍 SQL Queries Executed\n");
+    sqlQueries.forEach((query, index) => {
+      console.log(`### Query ${index + 1}:`);
+      console.log("```sql");
+      console.log(query);
+      console.log("```\n");
+    });
+  }
+  
+  if (sqlResults.length > 0) {
+    console.log("## 📋 Query Results\n");
+    sqlResults.forEach((result, index) => {
+      console.log(`### Result ${index + 1}:`);
+      console.log("```");
+      console.log(result);
+      console.log("```\n");
+    });
+  }
+  
+  if (agentResponse) {
+    console.log("## 🤖 Agent Response\n");
+    console.log(agentResponse);
+  }
+  
+  console.log("\n" + "=".repeat(80));
 }
 
 
