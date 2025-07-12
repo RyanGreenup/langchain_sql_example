@@ -1,9 +1,9 @@
+import { ChatAnthropic } from "@langchain/anthropic";
+import { Annotation, StateGraph } from "@langchain/langgraph";
 import { SqlDatabase } from "langchain/sql_db";
-import { DataSource } from "typeorm";
-import { Annotation } from "@langchain/langgraph";
-import { z } from "zod";
 import { QuerySqlTool } from "langchain/tools/sql";
-import { StateGraph } from "@langchain/langgraph";
+import { DataSource } from "typeorm";
+import { z } from "zod";
 
 const InputStateAnnotation = Annotation.Root({
   question: Annotation<string>,
@@ -15,10 +15,9 @@ const StateAnnotation = Annotation.Root({
   result: Annotation<string>,
   answer: Annotation<string>,
 });
-import { ChatAnthropic } from "@langchain/anthropic";
 
-import { pull } from "langchain/hub";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { pull } from "langchain/hub";
 
 function get_llm(): ChatAnthropic {
   // Depends on ANTHROPIC_API_KEY env var
@@ -136,19 +135,32 @@ async function main() {
     .addEdge("generateAnswer", "__end__");
   const graph = graphBuilder.compile();
 
-  let inputs = { question: "How many employees are there?" };
-  console.log("-----------------------------------------------------------------")
-  console.log("-----------------------------------------------------------------")
-  console.log("-----------------------------------------------------------------")
+  let inputs = {
+    question: "Show how to join two tables",
+  };
+  console.log(
+    "-----------------------------------------------------------------",
+  );
+  console.log(
+    "-----------------------------------------------------------------",
+  );
+  console.log(
+    "-----------------------------------------------------------------",
+  );
 
   console.log(inputs);
   console.log("\n====\n");
+  let finalResult: any[] = [];
   for await (const step of await graph.stream(inputs, {
     streamMode: "updates",
   })) {
     console.log(step);
     console.log("\n====\n");
+    finalResult.push(step);
   }
+  // Print only the output text here
+  console.log("Final Answer:");
+  console.log(finalResult);
 }
 
 //
