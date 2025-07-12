@@ -2,6 +2,8 @@ import { SqlDatabase } from "langchain/sql_db";
 import { DataSource } from "typeorm";
 import { Annotation } from "@langchain/langgraph";
 import { z } from "zod";
+import { QuerySqlTool } from "langchain/tools/sql";
+import { StateGraph } from "@langchain/langgraph";
 
 const InputStateAnnotation = Annotation.Root({
   question: Annotation<string>,
@@ -58,45 +60,96 @@ async function main() {
   const llm = get_llm();
 
   // Query the LLM
+
+  // Step 1: Define the expected output structure using Zod schema
+  // This ensures the LLM returns a properly formatted SQL query
   const queryOutput = z.object({
     query: z.string().describe("Syntactically valid SQL query."),
   });
 
+  // Step 2: Create a structured LLM that will enforce the output schema
+  // This wraps our LLM to guarantee structured responses
   const structuredLlm = llm.withStructuredOutput(queryOutput);
 
+  // Step 3: Define the query writing function
+  // This function takes a question and converts it to a SQL query
   const writeQuery = async (state: typeof InputStateAnnotation.State) => {
+    // Step 3a: Prepare the prompt with database context and user question
     const promptValue = await queryPromptTemplate.invoke({
-      dialect: db.appDataSourceOptions.type,
-      top_k: 10,
-      table_info: await db.getTableInfo(),
-      input: state.question,
+      dialect: db.appDataSourceOptions.type, // Database type (sqlite)
+      top_k: 10, // Limit results to 10 rows
+      table_info: await db.getTableInfo(), // Database schema information
+      input: state.question, // User's natural language question
     });
+
+    // Step 3b: Send the prompt to the LLM and get structured response
     const result = await structuredLlm.invoke(promptValue);
+
+    // Step 3c: Return the generated SQL query
     return { query: result.query };
   };
 
+  // Step 4: Test the query generation with an example question
   const result_2 = await writeQuery({
     question: "How many Employees are there?",
   });
   console.log(result_2);
 
+  // Execute the query
 
+  const executeQuery = async (state: typeof StateAnnotation.State) => {
+    const executeQueryTool = new QuerySqlTool(db);
+    return { result: await executeQueryTool.invoke(state.query) };
+  };
 
+  const result_3 = await executeQuery({
+    question: "",
+    query: "SELECT COUNT(*) AS EmployeeCount FROM Employee;",
+    result: "",
+    answer: "",
+  });
 
+  console.log(result_3);
 
+  // Answer the Question
+  const generateAnswer = async (state: typeof StateAnnotation.State) => {
+    const promptValue =
+      "Given the following user question, corresponding SQL query, " +
+      "and SQL result, answer the user question.\n\n" +
+      `Question: ${state.question}\n` +
+      `SQL Query: ${state.query}\n` +
+      `SQL Result: ${state.result}\n`;
+    const response = await llm.invoke(promptValue);
+    return { answer: response.content };
+  };
 
+  // Langchain Graph
+  const graphBuilder = new StateGraph({
+    stateSchema: StateAnnotation,
+  })
+    .addNode("writeQuery", writeQuery)
+    .addNode("executeQuery", executeQuery)
+    .addNode("generateAnswer", generateAnswer)
+    .addEdge("__start__", "writeQuery")
+    .addEdge("writeQuery", "executeQuery")
+    .addEdge("executeQuery", "generateAnswer")
+    .addEdge("generateAnswer", "__end__");
+  const graph = graphBuilder.compile();
 
+  let inputs = { question: "How many employees are there?" };
+  console.log("-----------------------------------------------------------------")
+  console.log("-----------------------------------------------------------------")
+  console.log("-----------------------------------------------------------------")
 
-
-
-
-
-
-
-
-
-
-
+  console.log(inputs);
+  console.log("\n====\n");
+  for await (const step of await graph.stream(inputs, {
+    streamMode: "updates",
+  })) {
+    console.log(step);
+    console.log("\n====\n");
+  }
 }
 
+//
 main().catch(console.error);
