@@ -11,3 +11,6 @@ run:
 
 run-agent:
     npx tsx agent.ts
+
+ask question="":
+    npx tsx ask.ts "{{question}}"
