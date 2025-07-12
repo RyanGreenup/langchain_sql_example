@@ -34,7 +34,6 @@ function get_llm(): ChatAnthropic {
 }
 async function main() {
   // Query the database
-
   const datasource = new DataSource({
     type: "sqlite",
     database: "Chinook.db",
@@ -80,6 +79,24 @@ async function main() {
     question: "How many Employees are there?",
   });
   console.log(result_2);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 
 main().catch(console.error);

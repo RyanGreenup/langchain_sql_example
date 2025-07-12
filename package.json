@@ -1,0 +1,20 @@
+{
+  "name": "Langchain",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@langchain/anthropic": "^0.3.24",
+    "@langchain/community": "^0.3.48",
+    "@langchain/langgraph": "^0.3.8",
+    "langchain": "^0.3.29",
+    "sqlite3": "^5.1.7",
+    "typeorm": "^0.3.25"
+  }
+}
